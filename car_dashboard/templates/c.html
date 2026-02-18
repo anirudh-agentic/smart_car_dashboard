@@ -1,0 +1,2084 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mustang Dashboard Compact</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* --- VARIABLES --- */
+        :root {
+            --theme-color: #ffffff; 
+            --theme-shadow: rgba(255, 255, 255, 0.4);
+            --glass-bg: linear-gradient(180deg, rgba(10,10,10,0.95) 0%, rgba(0,0,0,0.98) 100%);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; transition: all 0.3s ease; }
+        
+        body {
+            background-color: #000;
+            color: white;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            position: relative;
+            font-family: 'Rajdhani', sans-serif;
+        }
+
+        /* --- LAYERS SYSTEM --- */
+        .layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.4s ease, visibility 0.4s;
+            display: flex; justify-content: center; align-items: center;
+            z-index: 5; 
+        }
+
+        .layer.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* 1. CAR LAYER */
+        .background-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: url("{% static 'car_dashboard/images/dashboard_car.png' %}") no-repeat;
+            background-size: 55% auto; 
+            background-position: center 60%; 
+            background-color: #000; 
+            z-index: 0; 
+            opacity: 1;
+            transition: opacity 0.5s ease, filter 0.5s ease;
+        }
+        
+        body.mode-overlay .background-layer { opacity: 0.2; filter: blur(8px); }
+
+        /* HIDE UI WHEN MENU IS OPEN */
+        body.mode-overlay .dashboard-panel,
+        body.mode-overlay .gear-selector {
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.95);
+        }
+
+        /* 2. MAP LAYER */
+        .map-layer { z-index: 5; }
+        .map-layer iframe {
+            width: 100%; height: 100%; border: none;
+            filter: invert(90%) hue-rotate(180deg) contrast(90%) grayscale(20%);
+        }
+
+        /* 3. CONTACTS POPUP */
+        .contacts-container {
+            width: 500px; height: 50vh;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 30px;
+            padding: 20px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            overflow-y: auto;
+        }
+        .contacts-container::-webkit-scrollbar { width: 0px; }
+
+        .contact-item {
+            display: flex; align-items: center; gap: 15px;
+            padding: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            cursor: pointer;
+            border-radius: 15px;
+        }
+        .contact-item:hover { background: rgba(255,255,255,0.1); }
+        .avatar {
+            width: 45px; height: 45px; border-radius: 50%;
+            background: #222; display: flex; justify-content: center; align-items: center;
+            font-size: 18px; color: #888; border: 1px solid #333;
+        }
+        .contact-info h3 { font-size: 16px; color: #fff; margin-bottom: 2px;}
+        .contact-info p { font-size: 12px; color: #666; }
+        .call-btn { margin-left: auto; color: #4caf50; font-size: 20px; padding: 10px; border-radius: 50%; background: rgba(76, 175, 80, 0.1); }
+
+        /* 4. PLAYLIST POPUP */
+        .playlist-container {
+            width: 500px; height: 50vh;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 30px;
+            padding: 20px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            overflow-y: auto;
+        }
+        .playlist-container::-webkit-scrollbar { width: 0px; }
+
+        .playlist-item {
+            display: flex; align-items: center; gap: 15px;
+            padding: 12px;
+            border-radius: 15px;
+            margin-bottom: 5px;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+        .playlist-item:hover { background: rgba(255,255,255,0.05); }
+        .playlist-item.active-song { 
+            background: rgba(255,255,255,0.1); 
+            border: 1px solid var(--theme-color);
+            box-shadow: 0 0 15px rgba(255,255,255,0.05);
+        }
+        .song-idx { font-size: 12px; color: #555; width: 20px; text-align: center;}
+        
+        .vignette {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0) 30%, rgba(0,0,0,1) 100%);
+            z-index: 1; pointer-events: none;
+        }
+
+        /* --- DASHBOARD UI --- */
+        .status-bar {
+            position: absolute; top: 30px; left: 40px;
+            display: flex; align-items: center; gap: 15px;
+            font-size: 18px; font-weight: 600; color: #ddd;
+            z-index: 20; text-shadow: 0 2px 5px rgba(0,0,0,1);
+        }
+
+        .gear-selector {
+            position: absolute; top: 25px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; gap: 20px; z-index: 20;
+            transition: opacity 0.4s ease; 
+        }
+        .gear-btn {
+            width: 45px; height: 45px; border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #444, #111);
+            border: 1px solid #555; display: flex; justify-content: center; align-items: center;
+            font-weight: 700; font-size: 16px; color: #999;
+            text-shadow: 0 0 5px rgba(255,255,255,0.2);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.9); cursor: pointer;
+        }
+        .gear-btn.active {
+            background: radial-gradient(circle at 30% 30%, #fff, #ddd); color: #000; border: none;
+            box-shadow: 0 0 15px var(--theme-color), 0 0 40px var(--theme-shadow); transform: scale(1.1);
+        }
+
+        /* --- UPDATED: COMPACT & GLOSSY PANELS --- */
+        .dashboard-panel {
+            position: absolute; 
+            /* Shorter Height (22% from top/bottom) */
+            top: 22%; 
+            bottom: 22%; 
+            /* Narrower Width */
+            width: 220px; 
+            
+            /* Glossy Style */
+            background: linear-gradient(180deg, rgba(30,30,30,0.4) 0%, rgba(0,0,0,0.7) 100%);
+            backdrop-filter: blur(20px); 
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 35px; 
+            border: 1px solid rgba(255,255,255,0.15);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.05);
+            
+            display: flex; flex-direction: column; justify-content: space-evenly; align-items: center;
+            z-index: 10; 
+            transition: opacity 0.4s ease;
+        }
+        .panel-left { left: 20px; } .panel-right { right: 20px; }
+
+        /* Gauges (Scaled Down) */
+        .gauge-container { 
+            position: relative; 
+            width: 75px; height: 75px; /* Smaller */
+            display: flex; justify-content: center; align-items: center; 
+        }
+        .gauge-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: rotate(135deg); filter: drop-shadow(0 0 6px var(--theme-shadow)); }
+        .gauge-svg circle { fill: none; stroke-width: 4; stroke-linecap: round; }
+        .panel-right .gauge-svg { transform: scaleX(-1) rotate(135deg); }
+        .circle-bg { stroke: rgba(255,255,255,0.05); }
+        .circle-val { stroke: var(--theme-color); transition: stroke-dashoffset 0.1s linear, stroke 0.5s ease; }
+        .gauge-info { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 100%; }
+        
+        .val-text { 
+            display: block; 
+            font-size: 20px; /* Smaller Text */
+            font-weight: 700; color: #fff; line-height: 0.9; text-shadow: 0 0 10px var(--theme-shadow); 
+        }
+        .unit-text { font-size: 10px; color: #ccc; margin-top: 4px; font-weight: 500; text-transform: lowercase; }
+
+        /* Bottom Dock */
+        .bottom-area { position: absolute; bottom: 25px; left: 0; width: 100%; display: flex; justify-content: space-between; padding: 0 50px; z-index: 20; }
+        .glass-dock { height: 55px; background: linear-gradient(180deg, rgba(20,20,20,0.95) 0%, rgba(0,0,0,1) 100%); border: 1px solid rgba(255,255,255,0.15); border-radius: 28px; display: flex; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.95); }
+        .dock-left { width: 40%; justify-content: space-evenly; }
+        .app-icon { width: 18px; opacity: 0.6; cursor: pointer; transition: 0.3s; }
+        .app-icon img { width: 100%; filter: brightness(0) invert(1); }
+        .app-icon:hover, .app-icon.active { opacity: 1; transform: scale(1.15); filter: drop-shadow(0 0 6px var(--theme-color)); }
+        .dock-right { width: 40%; padding: 0 20px; gap: 12px; }
+        .album-art { width: 32px; height: 32px; border-radius: 50%; background-color: #333; background-size: cover; background-position: center; border: 1px solid rgba(255,255,255,0.3); transition: box-shadow 0.3s ease; }
+        .album-art.playing { box-shadow: 0 0 15px var(--theme-color); animation: pulse-glow 2s infinite; }
+        @keyframes pulse-glow { 0% { box-shadow: 0 0 5px var(--theme-color); } 50% { box-shadow: 0 0 20px var(--theme-color); } 100% { box-shadow: 0 0 5px var(--theme-color); } }
+        .track-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        .song-title { font-size: 12px; font-weight: 700; color: #fff; }
+        .song-meta { font-size: 9px; color: #aaa; margin-top: 1px; }
+        .controls { display: flex; gap: 12px; font-size: 14px; color: #fff; }
+        .controls i { cursor: pointer; transition: 0.2s; }
+        .controls i:hover { text-shadow: 0 0 8px var(--theme-color); color: var(--theme-color); }
+    /* --- CAR IGNITION ANIMATION --- */
+        @keyframes car-ignition {
+            0% {
+                filter: brightness(0) blur(10px); /* Pitch black & blurry */
+                background-size: 60% auto;       /* Zoomed out slightly */
+            }
+            15% {
+                filter: brightness(0.2) blur(5px); /* Dim light */
+            }
+            30% {
+                filter: brightness(1.8) blur(0px); /* FLASH! (Headlights on) */
+                background-size: 64% auto;        /* Zooming in fast */
+            }
+            100% {
+                filter: brightness(1) blur(0px);   /* Settle to normal */
+                background-size: 65% auto;        /* Final zoom position */
+            }
+        }
+
+        /* Class to trigger the animation */
+        .car-animating .background-layer {
+            animation: car-ignition 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        /* ============================================ */
+        /* NEW INTERACTIVE FEATURES - ADDED STYLES */
+        /* ============================================ */
+
+        /* Voice Command Indicator */
+        .voice-indicator {
+            position: absolute;
+            top: 90px;
+            left: 40px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,0,0,0.3), transparent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 25;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            cursor: pointer;
+        }
+        .voice-indicator.listening {
+            opacity: 1;
+            animation: voice-pulse 1.5s infinite;
+        }
+        @keyframes voice-pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 10px rgba(255,0,0,0.5); }
+            50% { transform: scale(1.2); box-shadow: 0 0 30px rgba(255,0,0,0.8); }
+        }
+
+        /* Weather Widget */
+        .weather-widget {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, rgba(20,20,20,0.9), rgba(0,0,0,0.95));
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 20;
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .weather-widget:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px var(--theme-shadow);
+        }
+        .weather-icon {
+            font-size: 24px;
+        }
+        .weather-temp {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        /* Notification Toast */
+        .notification-toast {
+            position: absolute;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 20px;
+            padding: 15px 30px;
+            z-index: 30;
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .notification-toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .notification-icon {
+            font-size: 24px;
+        }
+        .notification-text {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        /* Ambient Lighting Strips */
+        .ambient-strip {
+            position: absolute;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, var(--theme-color), transparent);
+            box-shadow: 0 0 20px var(--theme-color);
+            opacity: 0.3;
+            z-index: 2;
+            transition: opacity 0.5s ease;
+        }
+        .ambient-top {
+            top: 0;
+            left: 0;
+            right: 0;
+        }
+        .ambient-bottom {
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+        body.high-speed .ambient-strip {
+            opacity: 0.8;
+            animation: ambient-pulse 0.5s infinite;
+        }
+        @keyframes ambient-pulse {
+            0%, 100% { box-shadow: 0 0 20px var(--theme-color); }
+            50% { box-shadow: 0 0 40px var(--theme-color); }
+        }
+
+        /* Speed Warning Overlay */
+        .speed-warning {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle, transparent 40%, rgba(255,0,0,0.1) 100%);
+            z-index: 3;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        body.high-speed .speed-warning {
+            opacity: 1;
+            animation: warning-flash 1s infinite;
+        }
+        @keyframes warning-flash {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Trip Computer Display */
+        .trip-computer {
+            position: absolute;
+            bottom: 100px;
+            right: 50px;
+            width: 200px;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 15px;
+            z-index: 15;
+            opacity: 0;
+            transform: translateX(250px);
+            transition: all 0.4s ease;
+        }
+        .trip-computer.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        .trip-stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 12px;
+        }
+        .trip-stat:last-child {
+            border-bottom: none;
+        }
+        .trip-label {
+            color: #888;
+        }
+        .trip-value {
+            color: #fff;
+            font-weight: 700;
+        }
+
+        /* Parking Sensors */
+        .parking-sensors {
+            position: absolute;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 15;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        .parking-sensors.active {
+            opacity: 1;
+        }
+        .sensor-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #333;
+            border: 1px solid #555;
+            transition: all 0.3s ease;
+        }
+        .sensor-dot.warning {
+            background: #ff9800;
+            box-shadow: 0 0 15px #ff9800;
+        }
+        .sensor-dot.danger {
+            background: #f44336;
+            box-shadow: 0 0 15px #f44336;
+            animation: sensor-blink 0.5s infinite;
+        }
+        @keyframes sensor-blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Performance Mode Badge */
+        .performance-badge {
+            position: absolute;
+            top: 90px;
+            left: 50%;
+            transform: translateX(-50%) scale(0);
+            background: linear-gradient(135deg, #ff3333, #ff6666);
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            z-index: 25;
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            box-shadow: 0 0 30px rgba(255,51,51,0.6);
+        }
+        .performance-badge.active {
+            opacity: 1;
+            transform: translateX(-50%) scale(1);
+        }
+
+        /* ============================================ */
+        /* ULTRA CREATIVE NEW FEATURES */
+        /* ============================================ */
+
+        /* REALISTIC HEADLIGHT BEAMS */
+        .headlight-beam {
+            position: absolute;
+            width: 200px;
+            height: 600px;
+            background: radial-gradient(ellipse at top, 
+                rgba(255, 255, 200, 0.4) 0%,
+                rgba(255, 255, 200, 0.2) 30%,
+                rgba(255, 255, 150, 0.1) 50%,
+                transparent 100%
+            );
+            bottom: 38%;
+            z-index: 4;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+            filter: blur(15px);
+        }
+        .headlight-left {
+            left: 36%;
+            transform: rotate(-8deg);
+        }
+        .headlight-right {
+            right: 36%;
+            transform: rotate(8deg);
+        }
+        body.headlights-on .headlight-beam {
+            opacity: 1;
+            animation: headlight-flicker 3s infinite;
+        }
+        @keyframes headlight-flicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.95; }
+        }
+
+        /* Dynamic Road Texture (appears when moving) */
+        .road-texture {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 30%;
+            background: repeating-linear-gradient(
+                180deg,
+                rgba(100, 100, 100, 0.05) 0px,
+                rgba(100, 100, 100, 0.05) 20px,
+                transparent 20px,
+                transparent 40px
+            );
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        body.driving .road-texture {
+            opacity: 1;
+            animation: road-move 1s linear infinite;
+        }
+        @keyframes road-move {
+            from { background-position: 0 0; }
+            to { background-position: 0 40px; }
+        }
+
+        /* Engine Temperature Monitor */
+        .engine-monitor {
+            position: absolute;
+            top: 150px;
+            left: 40px;
+            width: 180px;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 15px;
+            z-index: 15;
+            opacity: 0;
+            transform: translateX(-250px);
+            transition: all 0.4s ease;
+        }
+        .engine-monitor.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        .engine-stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 11px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .engine-stat:last-child { border-bottom: none; }
+        .engine-label { color: #888; }
+        .engine-value { color: #fff; font-weight: 700; }
+        .engine-value.warning { color: #ff9800; }
+        .engine-value.danger { color: #f44336; animation: blink 1s infinite; }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Tire Pressure Display */
+        .tire-pressure {
+            position: absolute;
+            bottom: 100px;
+            left: 50px;
+            width: 180px;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 15px;
+            z-index: 15;
+            opacity: 0;
+            transform: translateX(-250px);
+            transition: all 0.4s ease;
+        }
+        .tire-pressure.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        .tire-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .tire-item {
+            background: rgba(255,255,255,0.05);
+            padding: 8px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 11px;
+        }
+        .tire-label {
+            color: #888;
+            font-size: 9px;
+            margin-bottom: 4px;
+        }
+        .tire-value {
+            color: #4caf50;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .tire-value.low {
+            color: #ff9800;
+        }
+
+        /* Cruise Control Indicator */
+        .cruise-control {
+            position: absolute;
+            top: 140px;
+            left: 50%;
+            transform: translateX(-50%) scale(0);
+            background: linear-gradient(135deg, #2196f3, #64b5f6);
+            padding: 8px 25px;
+            border-radius: 20px;
+            z-index: 25;
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            box-shadow: 0 0 30px rgba(33, 150, 243, 0.6);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .cruise-control.active {
+            opacity: 1;
+            transform: translateX(-50%) scale(1);
+        }
+        .cruise-speed {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        /* Speedometer Streak Effect */
+        .speed-streak {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent);
+            z-index: 2;
+            opacity: 0;
+            pointer-events: none;
+        }
+        body.high-speed .speed-streak {
+            opacity: 1;
+            animation: streak-move 0.3s linear infinite;
+        }
+        @keyframes streak-move {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(100%); }
+        }
+
+        /* Fuel Warning */
+        .fuel-warning {
+            position: absolute;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #ff5722, #ff8a65);
+            padding: 8px 20px;
+            border-radius: 20px;
+            z-index: 25;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            box-shadow: 0 0 30px rgba(255, 87, 34, 0.6);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .fuel-warning.active {
+            opacity: 1;
+            animation: fuel-blink 1s infinite;
+        }
+        @keyframes fuel-blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* Rain Effect */
+        .rain-drop {
+            position: absolute;
+            width: 2px;
+            height: 20px;
+            background: linear-gradient(transparent, rgba(255,255,255,0.6));
+            z-index: 30;
+            opacity: 0;
+        }
+        body.rain-mode .rain-drop {
+            opacity: 1;
+            animation: rain-fall 1s linear infinite;
+        }
+        @keyframes rain-fall {
+            from { transform: translateY(-100px); }
+            to { transform: translateY(100vh); }
+        }
+
+        /* Night Vision Mode */
+        body.night-vision .background-layer {
+            filter: grayscale(1) brightness(0.7) contrast(1.3);
+        }
+        body.night-vision {
+            background: #0a2f0a;
+        }
+
+        /* Autopilot Indicator */
+        .autopilot-hud {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: 300px;
+            border: 2px solid rgba(0, 255, 0, 0.3);
+            border-radius: 20px;
+            z-index: 15;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .autopilot-hud.active {
+            opacity: 1;
+            animation: hud-scan 2s infinite;
+        }
+        @keyframes hud-scan {
+            0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 0, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(0, 255, 0, 0.6); }
+        }
+        .autopilot-hud::before {
+            content: 'AUTOPILOT ENGAGED';
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #0f0;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+
+        /* G-Force Meter */
+        .g-force-meter {
+            position: absolute;
+            top: 50%;
+            right: 50px;
+            transform: translateY(-50%);
+            width: 60px;
+            height: 60px;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 50%;
+            z-index: 15;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .g-force-meter.visible {
+            opacity: 1;
+        }
+        .g-indicator {
+            width: 8px;
+            height: 8px;
+            background: var(--theme-color);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px var(--theme-color);
+            transition: transform 0.1s ease;
+        }
+
+        /* Drift Mode Indicator */
+        .drift-mode {
+            position: absolute;
+            top: 190px;
+            left: 50%;
+            transform: translateX(-50%) rotate(-5deg) scale(0);
+            background: linear-gradient(135deg, #9c27b0, #ba68c8);
+            padding: 8px 25px;
+            border-radius: 20px;
+            z-index: 25;
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            box-shadow: 0 0 30px rgba(156, 39, 176, 0.6);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+        .drift-mode.active {
+            opacity: 1;
+            transform: translateX(-50%) rotate(-5deg) scale(1);
+            animation: drift-shake 0.5s infinite;
+        }
+        @keyframes drift-shake {
+            0%, 100% { transform: translateX(-50%) rotate(-5deg) scale(1); }
+            50% { transform: translateX(-50%) rotate(-7deg) scale(1.05); }
+        }
+
+        /* Boost Meter */
+        .boost-meter {
+            position: absolute;
+            bottom: 140px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            z-index: 15;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .boost-meter.visible {
+            opacity: 1;
+        }
+        .boost-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #ff3333, #ff6666, #ffaa33);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 15px rgba(255, 51, 51, 0.8);
+        }
+
+        /* Radar Display */
+        .radar-display {
+            position: absolute;
+            top: 150px;
+            right: 40px;
+            width: 120px;
+            height: 120px;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 50%;
+            z-index: 15;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .radar-display.visible {
+            opacity: 1;
+        }
+        .radar-sweep {
+            width: 80%;
+            height: 80%;
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            border-radius: 50%;
+            position: relative;
+        }
+        .radar-sweep::before {
+            content: '';
+            position: absolute;
+            width: 50%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(0, 255, 0, 0.8));
+            top: 50%;
+            left: 50%;
+            transform-origin: left center;
+            animation: radar-spin 3s linear infinite;
+        }
+        @keyframes radar-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Turbo Boost Flash */
+        .turbo-flash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle, rgba(255, 100, 0, 0.3), transparent 70%);
+            z-index: 4;
+            opacity: 0;
+            pointer-events: none;
+        }
+        body.turbo-boost .turbo-flash {
+            animation: turbo-pulse 0.3s ease-out;
+        }
+        @keyframes turbo-pulse {
+            0% { opacity: 0; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(1.2); }
+        }
+    </style>
+</head>
+<body class="headlights-on">
+
+    <div class="background-layer"></div>
+    <div class="vignette"></div>
+
+    <!-- NEW: Headlight Beams -->
+    <div class="headlight-beam headlight-left"></div>
+    <div class="headlight-beam headlight-right"></div>
+
+    <!-- NEW: Road Texture -->
+    <div class="road-texture"></div>
+
+    <!-- NEW: Speed Streak -->
+    <div class="speed-streak"></div>
+
+    <!-- NEW: Turbo Flash -->
+    <div class="turbo-flash"></div>
+
+    <!-- Ambient Lighting -->
+    <div class="ambient-strip ambient-top"></div>
+    <div class="ambient-strip ambient-bottom"></div>
+
+    <!-- Speed Warning Overlay -->
+    <div class="speed-warning"></div>
+
+    <div class="layer" id="layer-map">
+        <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d243647.31604070624!2d78.40804555!3d17.41262745!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bcb99daeaebd2c7%3A0xae93b78392bafbc2!2sHyderabad%2C%20Telangana!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin" style="width:100%; height:100%;" allowfullscreen="" loading="lazy"></iframe>
+    </div>
+
+    <div class="layer" id="layer-contacts">
+        <div class="contacts-container">
+            <h2 style="margin-bottom: 20px; font-weight: 700;">Contacts</h2>
+            <div class="contact-item">
+                <div class="avatar"><i class="fas fa-user"></i></div>
+                <div class="contact-info"><h3>Mom</h3><p>+1 234 567 890</p></div>
+                <div class="call-btn"><i class="fas fa-phone"></i></div>
+            </div>
+            <div class="contact-item">
+                <div class="avatar"><i class="fas fa-building"></i></div>
+                <div class="contact-info"><h3>Work</h3><p>+1 987 654 321</p></div>
+                <div class="call-btn"><i class="fas fa-phone"></i></div>
+            </div>
+            <div class="contact-item">
+                <div class="avatar"><i class="fas fa-user-circle"></i></div>
+                <div class="contact-info"><h3>John Doe</h3><p>+1 555 019 283</p></div>
+                <div class="call-btn"><i class="fas fa-phone"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="layer" id="layer-playlist">
+        <div class="playlist-container">
+            <h2 style="margin-bottom: 20px; font-weight: 700;">Now Playing</h2>
+            <div id="playlist-items-container"></div>
+        </div>
+    </div>
+
+    <!-- Voice Command Indicator -->
+    <div class="voice-indicator" id="voiceIndicator">
+        <i class="fas fa-microphone" style="font-size: 20px; color: #ff3333;"></i>
+    </div>
+
+    <!-- Weather Widget -->
+    <div class="weather-widget" id="weatherWidget">
+        <i class="fas fa-cloud-sun weather-icon"></i>
+        <span class="weather-temp">28°C</span>
+    </div>
+
+    <!-- Notification Toast -->
+    <div class="notification-toast" id="notificationToast">
+        <i class="notification-icon fas fa-bell"></i>
+        <span class="notification-text">Welcome to your Mustang</span>
+    </div>
+
+    <!-- Performance Badge -->
+    <div class="performance-badge" id="performanceBadge">SPORT MODE</div>
+
+    <!-- NEW: Cruise Control -->
+    <div class="cruise-control" id="cruiseControl">
+        <i class="fas fa-tachometer-alt"></i>
+        <span class="cruise-speed" id="cruiseSpeed">120 km/h</span>
+    </div>
+
+    <!-- NEW: Drift Mode -->
+    <div class="drift-mode" id="driftMode">⚡ DRIFT MODE ⚡</div>
+
+    <!-- NEW: Autopilot HUD -->
+    <div class="autopilot-hud" id="autopilotHud"></div>
+
+    <!-- Trip Computer -->
+    <div class="trip-computer" id="tripComputer">
+        <div class="trip-stat">
+            <span class="trip-label">Avg Speed</span>
+            <span class="trip-value" id="avgSpeed">0 km/h</span>
+        </div>
+        <div class="trip-stat">
+            <span class="trip-label">Distance</span>
+            <span class="trip-value" id="tripDistance">0.0 km</span>
+        </div>
+        <div class="trip-stat">
+            <span class="trip-label">Duration</span>
+            <span class="trip-value" id="tripDuration">00:00</span>
+        </div>
+        <div class="trip-stat">
+            <span class="trip-label">Fuel Used</span>
+            <span class="trip-value" id="fuelUsed">0.0 L</span>
+        </div>
+    </div>
+
+    <!-- NEW: Engine Monitor -->
+    <div class="engine-monitor" id="engineMonitor">
+        <h3 style="font-size: 12px; margin-bottom: 10px; color: var(--theme-color);">ENGINE</h3>
+        <div class="engine-stat">
+            <span class="engine-label">Temperature</span>
+            <span class="engine-value" id="engineTemp">90°C</span>
+        </div>
+        <div class="engine-stat">
+            <span class="engine-label">Oil Pressure</span>
+            <span class="engine-value" id="oilPressure">45 PSI</span>
+        </div>
+        <div class="engine-stat">
+            <span class="engine-label">RPM</span>
+            <span class="engine-value" id="engineRPM">2500</span>
+        </div>
+        <div class="engine-stat">
+            <span class="engine-label">Battery</span>
+            <span class="engine-value" id="batteryVolt">12.6V</span>
+        </div>
+    </div>
+
+    <!-- NEW: Tire Pressure -->
+    <div class="tire-pressure" id="tirePressure">
+        <h3 style="font-size: 12px; margin-bottom: 5px; color: var(--theme-color);">TIRE PRESSURE</h3>
+        <div class="tire-grid">
+            <div class="tire-item">
+                <div class="tire-label">FRONT L</div>
+                <div class="tire-value" id="tireFL">32 PSI</div>
+            </div>
+            <div class="tire-item">
+                <div class="tire-label">FRONT R</div>
+                <div class="tire-value" id="tireFR">32 PSI</div>
+            </div>
+            <div class="tire-item">
+                <div class="tire-label">REAR L</div>
+                <div class="tire-value" id="tireRL">30 PSI</div>
+            </div>
+            <div class="tire-item">
+                <div class="tire-label">REAR R</div>
+                <div class="tire-value" id="tireRR">30 PSI</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW: G-Force Meter -->
+    <div class="g-force-meter" id="gForceMeter">
+        <div class="g-indicator" id="gIndicator"></div>
+        <div style="font-size: 9px; color: #666; position: absolute; bottom: -20px;">G-FORCE</div>
+    </div>
+
+    <!-- NEW: Boost Meter -->
+    <div class="boost-meter" id="boostMeter">
+        <div class="boost-fill" id="boostFill"></div>
+    </div>
+
+    <!-- NEW: Radar Display -->
+    <div class="radar-display" id="radarDisplay">
+        <div class="radar-sweep"></div>
+    </div>
+
+    <!-- NEW: Fuel Warning -->
+    <div class="fuel-warning" id="fuelWarning">
+        <i class="fas fa-gas-pump"></i>
+        <span>LOW FUEL</span>
+    </div>
+
+    <!-- Parking Sensors -->
+    <div class="parking-sensors" id="parkingSensors">
+        <div class="sensor-dot"></div>
+        <div class="sensor-dot"></div>
+        <div class="sensor-dot"></div>
+        <div class="sensor-dot"></div>
+        <div class="sensor-dot"></div>
+    </div>
+
+    <div class="status-bar">
+        <i class="fas fa-wifi"></i>
+        <span id="live-clock">--:--</span>
+        <span id="live-date" style="opacity: 0.6; font-weight: 400; margin-left: 10px;">--- --- --</span>
+    </div>
+
+    <div class="gear-selector">
+        <div class="gear-btn">P</div>
+        <div class="gear-btn active">R</div>
+        <div class="gear-btn">N</div>
+        <div class="gear-btn">D</div>
+    </div>
+
+    <div class="dashboard-panel panel-left">
+        <div class="gauge-container"><svg class="gauge-svg" viewBox="0 0 100 100"><circle class="circle-bg" cx="50" cy="50" r="45"></circle><circle class="circle-val" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="120"></circle></svg><div class="gauge-info"><span class="val-text" id="gauge-clock">12:33</span><span class="unit-text" id="gauge-ampm">pm</span></div></div>
+        <div class="gauge-container"><svg class="gauge-svg" viewBox="0 0 100 100"><circle class="circle-bg" cx="50" cy="50" r="45"></circle><circle class="circle-val" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="150"></circle></svg><div class="gauge-info"><span class="val-text">20°C</span><span class="unit-text">temperature</span></div></div>
+        <div class="gauge-container"><svg class="gauge-svg" viewBox="0 0 100 100"><circle class="circle-bg" cx="50" cy="50" r="45"></circle><circle class="circle-val" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="90"></circle></svg><div class="gauge-info"><span class="val-text">75 %</span><span class="unit-text">volume</span></div></div>
+    </div>
+
+    <div class="dashboard-panel panel-right">
+        <div class="gauge-container"><svg class="gauge-svg" viewBox="0 0 100 100"><circle class="circle-bg" cx="50" cy="50" r="45"></circle><circle id="speed-ring" class="circle-val" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="283"></circle></svg><div class="gauge-info"><span id="speed-val" class="val-text" style="font-size: 28px;">0</span><span class="unit-text">km/h<br>speed</span></div></div>
+        <div class="gauge-container"><svg class="gauge-svg" viewBox="0 0 100 100"><circle class="circle-bg" cx="50" cy="50" r="45"></circle><circle id="fuel-ring" class="circle-val" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="130"></circle></svg><div class="gauge-info"><span class="val-text" id="fuel-percent">60%</span><span class="unit-text">fuel</span></div></div>
+        <div class="gauge-container"><svg class="gauge-svg" viewBox="0 0 100 100"><circle class="circle-bg" cx="50" cy="50" r="45"></circle><circle class="circle-val" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="190"></circle></svg><div class="gauge-info"><span class="val-text">32 km</span><span class="unit-text">range</span></div></div>
+    </div>
+
+    <div class="bottom-area">
+        <div class="glass-dock dock-left">
+            <div class="app-icon active" id="btn-home" data-target="home"><img src="{% static 'car_dashboard/images/car.png' %}"></div>
+            <div class="app-icon" id="btn-map" data-target="layer-map"><img src="{% static 'car_dashboard/images/map.png' %}"></div>
+            <div class="app-icon" id="btn-phone" data-target="layer-contacts"><img src="{% static 'car_dashboard/images/call.log.png' %}"></div>
+            <div class="app-icon" id="btn-music" data-target="layer-playlist"><img src="{% static 'car_dashboard/images/vaadin_music.png' %}"></div>
+            <div class="app-icon" id="settings-btn"><img src="{% static 'car_dashboard/images/settings.png' %}"></div>
+            <div class="app-icon"><img src="{% static 'car_dashboard/images/person.png' %}"></div>
+        </div>
+
+        <div class="glass-dock dock-right">
+            <div class="album-art"></div>
+            <div class="track-info">
+                <div class="song-title">Mockingbird</div>
+                <div class="song-meta">Eminem - Mockingbird - Single</div>
+            </div>
+            <div class="controls">
+                <i class="fas fa-backward" id="prev-btn"></i>
+                <i class="fas fa-play" id="play-btn"></i>
+                <i class="fas fa-forward" id="next-btn"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rain Drops (for rain mode) -->
+    <div id="rainContainer"></div>
+
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            /* --- 1. AUDIO SYSTEM --- */
+            const soundPath = "{% static 'car_dashboard/audio/speed_sound.mp3' %}";
+            console.log("Attempting to load sound from:", soundPath);
+
+            const clickSfx = new Audio(soundPath);
+            clickSfx.volume = 1.0; 
+
+            // Audio Debugging
+            clickSfx.addEventListener('canplaythrough', () => console.log("✅ Audio loaded!"));
+            clickSfx.addEventListener('error', (e) => console.error("❌ Audio failed:", e));
+
+            /* --- 2. ANIMATION: CAR IGNITION SEQUENCE --- */
+            document.body.classList.add('car-animating');
+            setTimeout(() => {
+                document.body.classList.remove('car-animating');
+            }, 2000);
+
+            /* --- 3. ANIMATION: GAUGE SWEEP (Startup) --- */
+            setTimeout(() => {
+                const speedRing = document.getElementById('speed-ring');
+                if(speedRing) {
+                    speedRing.style.transition = "stroke-dashoffset 0.8s ease-in-out";
+                    speedRing.style.strokeDashoffset = "80";
+                    
+                    setTimeout(() => {
+                        speedRing.style.strokeDashoffset = "283";
+                        setTimeout(() => { 
+                            speedRing.style.transition = "stroke-dashoffset 0.1s linear"; 
+                        }, 800);
+                    }, 1000);
+                }
+            }, 500);
+
+            /* --- 4. SONGS DATA --- */
+            const audioPlayer = new Audio();
+            const songs = [
+                { title: "Mockingbird", artist: "Eminem", cover: "https://upload.wikimedia.org/wikipedia/en/6/60/Eminem_-_Mockingbird.jpg", src: "{% static 'car_dashboard/audio/mockingbird.mp3' %}" },
+                { title: "Starboy", artist: "The Weeknd", cover: "https://upload.wikimedia.org/wikipedia/en/3/39/The_Weeknd_-_Starboy.png", src: "{% static 'car_dashboard/audio/starboy.mp3' %}" },
+                { title: "Metamorphosis", artist: "Interworld", cover: "https://i1.sndcdn.com/artworks-5058e578-8314-43cb-b003-81b4380f5556-0-t500x500.jpg", src: "{% static 'car_dashboard/audio/metamorphosis.mp3' %}" }
+            ];
+            let songIndex = 0;
+            let isPlaying = false;
+
+            /* --- 5. VIEW SWITCHER --- */
+            const navButtons = document.querySelectorAll('.dock-left .app-icon[data-target]');
+            const layers = document.querySelectorAll('.layer:not(.background-layer)');
+            const body = document.body;
+
+            navButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    playClick();
+                    document.querySelectorAll('.app-icon').forEach(icon => icon.classList.remove('active'));
+                    btn.classList.add('active');
+                    layers.forEach(layer => layer.classList.remove('active'));
+                    
+                    const targetId = btn.getAttribute('data-target');
+                    if (targetId === 'home') {
+                        body.classList.remove('mode-overlay');
+                    } else {
+                        body.classList.add('mode-overlay');
+                        const targetLayer = document.getElementById(targetId);
+                        if(targetLayer) targetLayer.classList.add('active');
+                    }
+                });
+            });
+
+            /* --- 6. PLAYLIST UI --- */
+            const playlistContainer = document.getElementById('playlist-items-container');
+            if (playlistContainer) {
+                songs.forEach((song, index) => {
+                    const item = document.createElement('div');
+                    item.classList.add('playlist-item');
+                    item.innerHTML = `
+                        <div class="song-idx">${index + 1}</div>
+                        <div class="avatar" style="background-image: url('${song.cover}'); background-size:cover; width:35px; height:35px; border-radius:8px;"></div>
+                        <div class="contact-info" style="margin-left:10px;">
+                            <h3 style="font-size:14px; margin:0;">${song.title}</h3>
+                            <p style="font-size:11px; margin:0; color:#888;">${song.artist}</p>
+                        </div>
+                    `;
+                    item.addEventListener('click', () => {
+                        playClick();
+                        songIndex = index;
+                        loadSong(songIndex);
+                    });
+                    playlistContainer.appendChild(item);
+                });
+            }
+
+            function updatePlaylistHighlight() {
+                const items = document.querySelectorAll('.playlist-item');
+                items.forEach((item, idx) => {
+                    if(idx === songIndex) item.classList.add('active-song');
+                    else item.classList.remove('active-song');
+                });
+            }
+
+            /* --- 7. AUDIO PLAYER --- */
+            const titleEl = document.querySelector('.song-title');
+            const metaEl = document.querySelector('.song-meta');
+            const artEl = document.querySelector('.album-art');
+            const playBtn = document.getElementById('play-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const prevBtn = document.getElementById('prev-btn');
+
+            loadSong(0);
+
+            function loadSong(index) {
+                const song = songs[index];
+                if(titleEl) titleEl.innerText = song.title;
+                if(metaEl) metaEl.innerText = song.artist;
+                if(artEl) artEl.style.backgroundImage = `url('${song.cover}')`;
+                audioPlayer.src = song.src;
+                if(isPlaying) audioPlayer.play();
+                updatePlaylistHighlight();
+            }
+
+            if(playBtn) {
+                playBtn.addEventListener('click', () => {
+                    if (isPlaying) {
+                        audioPlayer.pause();
+                        playBtn.classList.remove('fa-pause');
+                        playBtn.classList.add('fa-play');
+                        if(artEl) artEl.classList.remove('playing');
+                    } else {
+                        audioPlayer.play();
+                        playBtn.classList.remove('fa-play');
+                        playBtn.classList.add('fa-pause');
+                        if(artEl) artEl.classList.add('playing');
+                    }
+                    isPlaying = !isPlaying;
+                });
+            }
+
+            function playClick() {
+                clickSfx.currentTime = 0;
+                clickSfx.play().catch(e => console.log("Audio play error:", e));
+            }
+
+            if(nextBtn) nextBtn.addEventListener('click', () => { 
+                playClick();
+                songIndex = (songIndex + 1) % songs.length; 
+                loadSong(songIndex); 
+            });
+
+            if(prevBtn) prevBtn.addEventListener('click', () => { 
+                playClick();
+                songIndex = (songIndex - 1 + songs.length) % songs.length; 
+                loadSong(songIndex); 
+            });
+
+            audioPlayer.addEventListener('ended', () => { 
+                songIndex = (songIndex + 1) % songs.length; 
+                loadSong(songIndex); 
+            });
+
+            /* --- 8. DRIVING PHYSICS & DYNAMIC GLOW --- */
+            let currentSpeed = 0, targetSpeed = 0, isAccelerating = false;
+            let currentFuel = 60; // percentage
+            
+            document.addEventListener('keydown', (e) => { 
+                if (e.key === 'ArrowUp' || e.key === 'w') { 
+                    isAccelerating = true; 
+                    targetSpeed = performanceMode ? 240 : 220; 
+                    body.classList.add('driving');
+                } 
+            });
+            
+            document.addEventListener('keyup', (e) => { 
+                if (e.key === 'ArrowUp' || e.key === 'w') { 
+                    isAccelerating = false; 
+                    targetSpeed = 0;
+                    if(currentSpeed === 0) {
+                        body.classList.remove('driving');
+                    }
+                } 
+            });
+            
+            setInterval(() => {
+                if (isAccelerating) { 
+                    if (currentSpeed < targetSpeed) currentSpeed += performanceMode ? 3 : 2;
+                    // Consume fuel while driving
+                    if(currentSpeed > 0) {
+                        currentFuel -= 0.001 * (currentSpeed / 100);
+                        if(currentFuel < 0) currentFuel = 0;
+                    }
+                } else { 
+                    if (currentSpeed > 0) {
+                        currentSpeed -= 1;
+                        if(currentSpeed <= 0) {
+                            body.classList.remove('driving');
+                        }
+                    }
+                }
+                
+                const speedValEl = document.getElementById('speed-val');
+                const speedRingEl = document.getElementById('speed-ring');
+
+                if(speedValEl) {
+                    speedValEl.innerText = Math.floor(currentSpeed);
+                    
+                    let intensity = currentSpeed / 220;
+                    let blurRadius = 10 + (intensity * 20);
+                    speedValEl.style.textShadow = `0 0 ${blurRadius}px var(--theme-color)`;
+                    
+                    if (currentSpeed > 150) {
+                        let jX = (Math.random() - 0.5) * 2; 
+                        let jY = (Math.random() - 0.5) * 2;
+                        speedValEl.style.transform = `translate(${jX}px, ${jY}px)`;
+                    } else {
+                        speedValEl.style.transform = `translate(0px, 0px)`;
+                    }
+                }
+
+                if(speedRingEl) {
+                    const maxOffset = 283; const minOffset = 80;
+                    const percentage = currentSpeed / 220;
+                    speedRingEl.style.strokeDashoffset = maxOffset - (percentage * (maxOffset - minOffset));
+                }
+
+                // Update fuel gauge
+                const fuelRing = document.getElementById('fuel-ring');
+                const fuelPercent = document.getElementById('fuel-percent');
+                if(fuelRing && fuelPercent) {
+                    const fuelPercentage = currentFuel / 100;
+                    const maxOffset = 283;
+                    const minOffset = 80;
+                    fuelRing.style.strokeDashoffset = maxOffset - (fuelPercentage * (maxOffset - minOffset));
+                    fuelPercent.innerText = Math.floor(currentFuel) + '%';
+                    
+                    // Show fuel warning
+                    const fuelWarning = document.getElementById('fuelWarning');
+                    if(currentFuel < 15) {
+                        fuelWarning.classList.add('active');
+                    } else {
+                        fuelWarning.classList.remove('active');
+                    }
+                }
+
+                // Update Engine RPM based on speed
+                const engineRPM = document.getElementById('engineRPM');
+                if(engineRPM) {
+                    const rpm = Math.floor(1000 + (currentSpeed * 30));
+                    engineRPM.innerText = rpm;
+                    
+                    // Change color at high RPM
+                    if(rpm > 6000) {
+                        engineRPM.classList.add('danger');
+                    } else {
+                        engineRPM.classList.remove('danger');
+                    }
+                }
+
+                // Update G-Force indicator
+                updateGForce();
+
+                // Update boost meter in turbo mode
+                if(turboBoostActive) {
+                    const boostFill = document.getElementById('boostFill');
+                    const boostPercentage = (currentSpeed / 240) * 100;
+                    boostFill.style.width = Math.min(boostPercentage, 100) + '%';
+                }
+
+            }, 20);
+
+            /* --- 9. CLOCK & THEME --- */
+            function updateDashboard() {
+                const now = new Date();
+                let hours = now.getHours(); 
+                const minutes = String(now.getMinutes()).padStart(2, '0'); 
+                const ampm = hours >= 12 ? 'pm' : 'am';
+                hours = hours % 12; 
+                hours = hours ? hours : 12; 
+                const timeStr = `${hours}:${minutes}`;
+                
+                const liveClock = document.getElementById('live-clock');
+                const gaugeClock = document.getElementById('gauge-clock');
+                const gaugeAmpm = document.getElementById('gauge-ampm');
+                const liveDate = document.getElementById('live-date');
+
+                if(liveClock) liveClock.innerText = timeStr;
+                if(gaugeClock) gaugeClock.innerText = timeStr;
+                if(gaugeAmpm) gaugeAmpm.innerText = ampm;
+                
+                const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; 
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                if(liveDate) liveDate.innerText = `${days[now.getDay()]} ${months[now.getMonth()]} ${now.getDate()}`;
+            }
+            setInterval(updateDashboard, 1000); 
+            updateDashboard();
+
+            const settingsBtn = document.getElementById('settings-btn');
+            const root = document.documentElement;
+            let themeState = 0; 
+            if(settingsBtn) {
+                settingsBtn.addEventListener('click', () => {
+                    playClick();
+                    themeState = (themeState + 1) % 3;
+                    if(themeState === 0) { 
+                        root.style.setProperty('--theme-color', '#ffffff'); 
+                        root.style.setProperty('--theme-shadow', 'rgba(255, 255, 255, 0.4)'); 
+                    } else if (themeState === 1) { 
+                        root.style.setProperty('--theme-color', '#ff3333'); 
+                        root.style.setProperty('--theme-shadow', 'rgba(255, 50, 50, 0.6)'); 
+                    } else { 
+                        root.style.setProperty('--theme-color', '#33ffaa'); 
+                        root.style.setProperty('--theme-shadow', 'rgba(50, 255, 170, 0.5)'); 
+                    }
+                });
+            }
+            
+            const gears = document.querySelectorAll('.gear-btn');
+            gears.forEach(gear => gear.addEventListener('click', function() { 
+                playClick();
+                gears.forEach(g => g.classList.remove('active')); 
+                this.classList.add('active'); 
+            }));
+
+            /* ============================================ */
+            /* ENHANCED INTERACTIVE FEATURES */
+            /* ============================================ */
+
+            // 1. WELCOME NOTIFICATION
+            setTimeout(() => {
+                showNotification('🏁 Welcome to your Mustang', 'fa-flag-checkered');
+            }, 2500);
+
+            function showNotification(message, iconClass = 'fa-bell') {
+                const toast = document.getElementById('notificationToast');
+                const icon = toast.querySelector('.notification-icon');
+                const text = toast.querySelector('.notification-text');
+                
+                icon.className = `notification-icon fas ${iconClass}`;
+                text.innerText = message;
+                
+                toast.classList.add('show');
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+
+            // 2. VOICE COMMAND (Press 'V')
+            const voiceIndicator = document.getElementById('voiceIndicator');
+            let isListening = false;
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'v' || e.key === 'V') {
+                    if (!isListening) {
+                        isListening = true;
+                        voiceIndicator.classList.add('listening');
+                        playClick();
+                        
+                        setTimeout(() => {
+                            isListening = false;
+                            voiceIndicator.classList.remove('listening');
+                            showNotification('Voice command received', 'fa-microphone');
+                        }, 2000);
+                    }
+                }
+            });
+
+            voiceIndicator.addEventListener('click', () => {
+                if (!isListening) {
+                    isListening = true;
+                    voiceIndicator.classList.add('listening');
+                    playClick();
+                    
+                    setTimeout(() => {
+                        isListening = false;
+                        voiceIndicator.classList.remove('listening');
+                        showNotification('Voice command received', 'fa-microphone');
+                    }, 2000);
+                }
+            });
+
+            // 3. WEATHER WIDGET
+            const weatherWidget = document.getElementById('weatherWidget');
+            const weatherStates = [
+                { icon: 'fa-cloud-sun', temp: '28°C' },
+                { icon: 'fa-sun', temp: '32°C' },
+                { icon: 'fa-cloud-rain', temp: '22°C' },
+                { icon: 'fa-snowflake', temp: '5°C' }
+            ];
+            let weatherIndex = 0;
+
+            weatherWidget.addEventListener('click', () => {
+                playClick();
+                weatherIndex = (weatherIndex + 1) % weatherStates.length;
+                const state = weatherStates[weatherIndex];
+                
+                const icon = weatherWidget.querySelector('.weather-icon');
+                const temp = weatherWidget.querySelector('.weather-temp');
+                
+                icon.className = `fas ${state.icon} weather-icon`;
+                temp.innerText = state.temp;
+            });
+
+            // 4. HIGH SPEED WARNING
+            let lastSpeedCheck = 0;
+            setInterval(() => {
+                if (currentSpeed > 160 && !body.classList.contains('high-speed')) {
+                    body.classList.add('high-speed');
+                    if (lastSpeedCheck === 0) {
+                        showNotification('⚠️ High Speed Warning', 'fa-exclamation-triangle');
+                        lastSpeedCheck = Date.now();
+                    }
+                } else if (currentSpeed <= 160) {
+                    body.classList.remove('high-speed');
+                    lastSpeedCheck = 0;
+                }
+            }, 500);
+
+            // 5. TRIP COMPUTER (Press 'T')
+            const tripComputer = document.getElementById('tripComputer');
+            let tripVisible = false;
+            let tripStartTime = Date.now();
+            let totalDistance = 0;
+            let totalFuel = 0;
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 't' || e.key === 'T') {
+                    tripVisible = !tripVisible;
+                    playClick();
+                    
+                    if (tripVisible) {
+                        tripComputer.classList.add('visible');
+                        tripStartTime = Date.now();
+                    } else {
+                        tripComputer.classList.remove('visible');
+                    }
+                }
+            });
+
+            setInterval(() => {
+                if (tripVisible) {
+                    const duration = Math.floor((Date.now() - tripStartTime) / 1000);
+                    const minutes = Math.floor(duration / 60);
+                    const seconds = duration % 60;
+                    
+                    totalDistance += (currentSpeed / 3600) * 0.5;
+                    totalFuel += (currentSpeed / 100000);
+                    
+                    const avgSpeedCalc = totalDistance > 0 ? (totalDistance / (duration / 3600)) : 0;
+                    
+                    document.getElementById('avgSpeed').innerText = `${Math.floor(avgSpeedCalc)} km/h`;
+                    document.getElementById('tripDistance').innerText = `${totalDistance.toFixed(1)} km`;
+                    document.getElementById('tripDuration').innerText = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                    document.getElementById('fuelUsed').innerText = `${totalFuel.toFixed(1)} L`;
+                }
+            }, 500);
+
+            // 6. PARKING SENSORS (Gear P)
+            const parkingSensors = document.getElementById('parkingSensors');
+            const sensorDots = parkingSensors.querySelectorAll('.sensor-dot');
+            
+            gears.forEach(gear => {
+                gear.addEventListener('click', function() {
+                    const gearText = this.innerText.trim();
+                    
+                    if (gearText === 'P') {
+                        parkingSensors.classList.add('active');
+                        simulateParkingSensors();
+                    } else {
+                        parkingSensors.classList.remove('active');
+                        sensorDots.forEach(dot => {
+                            dot.classList.remove('warning', 'danger');
+                        });
+                    }
+                });
+            });
+
+            function simulateParkingSensors() {
+                let sensorInterval = setInterval(() => {
+                    if (!parkingSensors.classList.contains('active')) {
+                        clearInterval(sensorInterval);
+                        return;
+                    }
+                    
+                    sensorDots.forEach((dot, index) => {
+                        const rand = Math.random();
+                        dot.classList.remove('warning', 'danger');
+                        
+                        if (rand > 0.7) {
+                            dot.classList.add('warning');
+                        } else if (rand > 0.9) {
+                            dot.classList.add('danger');
+                        }
+                    });
+                }, 1000);
+            }
+
+            // 7. PERFORMANCE MODE (Press 'S')
+            const performanceBadge = document.getElementById('performanceBadge');
+            let performanceMode = false;
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 's' || e.key === 'S') {
+                    performanceMode = !performanceMode;
+                    playClick();
+                    
+                    if (performanceMode) {
+                        performanceBadge.classList.add('active');
+                        showNotification('🏎️ Sport Mode Activated', 'fa-tachometer-alt');
+                        targetSpeed = 240;
+                    } else {
+                        performanceBadge.classList.remove('active');
+                        showNotification('Comfort Mode Activated', 'fa-leaf');
+                        targetSpeed = 220;
+                    }
+                }
+            });
+
+            // 8. DOUBLE-TAP PANELS
+            let lastTapTime = 0;
+            
+            document.querySelectorAll('.dashboard-panel').forEach(panel => {
+                panel.addEventListener('click', (e) => {
+                    const currentTime = Date.now();
+                    
+                    if (currentTime - lastTapTime < 300) {
+                        playClick();
+                        showNotification('📊 Dashboard diagnostics OK', 'fa-check-circle');
+                    }
+                    
+                    lastTapTime = currentTime;
+                });
+            });
+
+            // 9. HORN (Press 'H')
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'h' || e.key === 'H') {
+                    playClick();
+                    showNotification('🔊 Horn!', 'fa-volume-up');
+                }
+            });
+
+            // 10. HEADLIGHTS TOGGLE (Press 'L')
+            let headlightsOn = true;
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'l' || e.key === 'L') {
+                    headlightsOn = !headlightsOn;
+                    playClick();
+                    
+                    if (headlightsOn) {
+                        body.classList.add('headlights-on');
+                        showNotification('💡 Headlights ON', 'fa-lightbulb');
+                    } else {
+                        body.classList.remove('headlights-on');
+                        showNotification('Headlights OFF', 'fa-lightbulb');
+                    }
+                }
+            });
+
+            /* ============================================ */
+            /* ULTRA CREATIVE NEW FEATURES */
+            /* ============================================ */
+
+            // 11. ENGINE MONITOR (Press 'E')
+            const engineMonitor = document.getElementById('engineMonitor');
+            let engineVisible = false;
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'e' || e.key === 'E') {
+                    engineVisible = !engineVisible;
+                    playClick();
+                    
+                    if (engineVisible) {
+                        engineMonitor.classList.add('visible');
+                        showNotification('🔧 Engine Monitor ON', 'fa-cog');
+                    } else {
+                        engineMonitor.classList.remove('visible');
+                    }
+                }
+            });
+
+            // Update engine stats
+            setInterval(() => {
+                const engineTemp = document.getElementById('engineTemp');
+                const oilPressure = document.getElementById('oilPressure');
+                const batteryVolt = document.getElementById('batteryVolt');
+                
+                if(engineTemp) {
+                    const temp = 85 + (currentSpeed / 20);
+                    engineTemp.innerText = Math.floor(temp) + '°C';
+                    
+                    if(temp > 105) {
+                        engineTemp.classList.add('danger');
+                    } else if(temp > 95) {
+                        engineTemp.classList.add('warning');
+                        engineTemp.classList.remove('danger');
+                    } else {
+                        engineTemp.classList.remove('warning', 'danger');
+                    }
+                }
+                
+                if(oilPressure) {
+                    const pressure = 40 + Math.random() * 10;
+                    oilPressure.innerText = Math.floor(pressure) + ' PSI';
+                }
+                
+                if(batteryVolt) {
+                    const voltage = 12.4 + Math.random() * 0.4;
+                    batteryVolt.innerText = voltage.toFixed(1) + 'V';
+                }
+            }, 1000);
+
+            // 12. TIRE PRESSURE MONITOR (Press 'P' key)
+            const tirePressure = document.getElementById('tirePressure');
+            let tireVisible = false;
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'p' && !e.shiftKey) {
+                    tireVisible = !tireVisible;
+                    playClick();
+                    
+                    if (tireVisible) {
+                        tirePressure.classList.add('visible');
+                        showNotification('🚗 Tire Pressure Monitor', 'fa-circle');
+                    } else {
+                        tirePressure.classList.remove('visible');
+                    }
+                }
+            });
+
+            // Simulate tire pressure changes
+            setInterval(() => {
+                const tires = ['tireFL', 'tireFR', 'tireRL', 'tireRR'];
+                tires.forEach(tireId => {
+                    const tire = document.getElementById(tireId);
+                    if(tire) {
+                        const pressure = 28 + Math.random() * 6;
+                        tire.innerText = Math.floor(pressure) + ' PSI';
+                        
+                        if(pressure < 30) {
+                            tire.classList.add('low');
+                        } else {
+                            tire.classList.remove('low');
+                        }
+                    }
+                });
+            }, 5000);
+
+            // 13. CRUISE CONTROL (Press 'C')
+            const cruiseControl = document.getElementById('cruiseControl');
+            const cruiseSpeed = document.getElementById('cruiseSpeed');
+            let cruiseActive = false;
+            let cruiseSetSpeed = 0;
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'c' || e.key === 'C') {
+                    if(!cruiseActive && currentSpeed > 40) {
+                        cruiseActive = true;
+                        cruiseSetSpeed = currentSpeed;
+                        cruiseControl.classList.add('active');
+                        cruiseSpeed.innerText = Math.floor(cruiseSetSpeed) + ' km/h';
+                        playClick();
+                        showNotification('🎯 Cruise Control SET', 'fa-bullseye');
+                    } else if(cruiseActive) {
+                        cruiseActive = false;
+                        cruiseControl.classList.remove('active');
+                        playClick();
+                        showNotification('Cruise Control OFF', 'fa-times');
+                    }
+                }
+            });
+
+            // Maintain cruise speed
+            setInterval(() => {
+                if(cruiseActive && !isAccelerating) {
+                    if(currentSpeed < cruiseSetSpeed - 2) {
+                        currentSpeed += 0.5;
+                    } else if(currentSpeed > cruiseSetSpeed + 2) {
+                        currentSpeed -= 0.5;
+                    }
+                }
+            }, 50);
+
+            // 14. DRIFT MODE (Press 'D' key)
+            const driftMode = document.getElementById('driftMode');
+            let driftActive = false;
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'd' && currentSpeed > 80) {
+                    driftActive = !driftActive;
+                    playClick();
+                    
+                    if(driftActive) {
+                        driftMode.classList.add('active');
+                        showNotification('⚡ DRIFT MODE ENGAGED', 'fa-bolt');
+                    } else {
+                        driftMode.classList.remove('active');
+                        showNotification('Drift Mode OFF', 'fa-times');
+                    }
+                }
+            });
+
+            // 15. G-FORCE METER (Press 'G')
+            const gForceMeter = document.getElementById('gForceMeter');
+            const gIndicator = document.getElementById('gIndicator');
+            let gForceVisible = false;
+            let lastSpeed = 0;
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'g' || e.key === 'G') {
+                    gForceVisible = !gForceVisible;
+                    playClick();
+                    
+                    if(gForceVisible) {
+                        gForceMeter.classList.add('visible');
+                        showNotification('📡 G-Force Meter ON', 'fa-crosshairs');
+                    } else {
+                        gForceMeter.classList.remove('visible');
+                    }
+                }
+            });
+
+            function updateGForce() {
+                if(gForceVisible && gIndicator) {
+                    const acceleration = (currentSpeed - lastSpeed) / 20;
+                    const gForce = acceleration / 9.8;
+                    
+                    const offsetX = Math.min(Math.max(gForce * 15, -20), 20);
+                    gIndicator.style.transform = `translate(calc(-50% + ${offsetX}px), -50%)`;
+                    
+                    lastSpeed = currentSpeed;
+                }
+            }
+
+            // 16. BOOST/TURBO MODE (Press 'B')
+            const boostMeter = document.getElementById('boostMeter');
+            let turboBoostActive = false;
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'b' || e.key === 'B') {
+                    if(!turboBoostActive && currentSpeed > 60) {
+                        turboBoostActive = true;
+                        boostMeter.classList.add('visible');
+                        body.classList.add('turbo-boost');
+                        playClick();
+                        showNotification('🔥 TURBO BOOST!', 'fa-fire');
+                        
+                        // Temporary speed boost
+                        targetSpeed = 260;
+                        
+                        setTimeout(() => {
+                            turboBoostActive = false;
+                            boostMeter.classList.remove('visible');
+                            body.classList.remove('turbo-boost');
+                            targetSpeed = performanceMode ? 240 : 220;
+                            showNotification('Turbo Cooldown', 'fa-snowflake');
+                        }, 5000);
+                    }
+                }
+            });
+
+            // 17. AUTOPILOT (Press 'A')
+            const autopilotHud = document.getElementById('autopilotHud');
+            let autopilotActive = false;
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'a' || e.key === 'A') {
+                    autopilotActive = !autopilotActive;
+                    playClick();
+                    
+                    if(autopilotActive) {
+                        autopilotHud.classList.add('active');
+                        showNotification('🤖 AUTOPILOT ENGAGED', 'fa-robot');
+                        
+                        // Auto-maintain speed at 100 km/h
+                        targetSpeed = 100;
+                    } else {
+                        autopilotHud.classList.remove('active');
+                        showNotification('Autopilot OFF', 'fa-times');
+                    }
+                }
+            });
+
+            // Autopilot maintains speed
+            setInterval(() => {
+                if(autopilotActive) {
+                    if(currentSpeed < 98) {
+                        currentSpeed += 0.5;
+                    } else if(currentSpeed > 102) {
+                        currentSpeed -= 0.5;
+                    }
+                }
+            }, 100);
+
+            // 18. RADAR DISPLAY (Press 'R')
+            const radarDisplay = document.getElementById('radarDisplay');
+            let radarVisible = false;
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'r' || e.key === 'R') {
+                    radarVisible = !radarVisible;
+                    playClick();
+                    
+                    if(radarVisible) {
+                        radarDisplay.classList.add('visible');
+                        showNotification('📡 Radar Active', 'fa-satellite-dish');
+                    } else {
+                        radarDisplay.classList.remove('visible');
+                    }
+                }
+            });
+
+            // 19. NIGHT VISION (Press 'N')
+            let nightVisionActive = false;
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'n' || e.key === 'N') {
+                    nightVisionActive = !nightVisionActive;
+                    playClick();
+                    
+                    if(nightVisionActive) {
+                        body.classList.add('night-vision');
+                        showNotification('👁️ Night Vision ON', 'fa-eye');
+                    } else {
+                        body.classList.remove('night-vision');
+                        showNotification('Night Vision OFF', 'fa-eye-slash');
+                    }
+                }
+            });
+
+            // 20. RAIN MODE (Press 'M')
+            let rainMode = false;
+            const rainContainer = document.getElementById('rainContainer');
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'm' || e.key === 'M') {
+                    rainMode = !rainMode;
+                    playClick();
+                    
+                    if(rainMode) {
+                        body.classList.add('rain-mode');
+                        showNotification('🌧️ Rain Mode ON', 'fa-cloud-rain');
+                        createRain();
+                    } else {
+                        body.classList.remove('rain-mode');
+                        rainContainer.innerHTML = '';
+                        showNotification('Rain Mode OFF', 'fa-sun');
+                    }
+                }
+            });
+
+            function createRain() {
+                if(!rainMode) return;
+                
+                for(let i = 0; i < 50; i++) {
+                    const drop = document.createElement('div');
+                    drop.className = 'rain-drop';
+                    drop.style.left = Math.random() * 100 + '%';
+                    drop.style.animationDelay = Math.random() * 1 + 's';
+                    drop.style.animationDuration = (0.5 + Math.random() * 0.5) + 's';
+                    rainContainer.appendChild(drop);
+                }
+            }
+
+            // 21. RANDOM EVENTS
+            setTimeout(() => {
+                const randomDelay = 15000 + Math.random() * 30000;
+                setTimeout(() => {
+                    showNotification('📞 Incoming call: Mom', 'fa-phone');
+                }, randomDelay);
+            }, 5000);
+
+            // 22. KEYBOARD SHORTCUTS (Press '?')
+            document.addEventListener('keydown', (e) => {
+                if (e.key === '?') {
+                    playClick();
+                    const shortcuts = `
+⌨️ ULTIMATE SHORTCUTS:
+
+BASIC:
+W/↑ = Accelerate
+L = Headlights Toggle
+H = Horn
+V = Voice Command
+
+DISPLAY:
+T = Trip Computer
+E = Engine Monitor
+P = Tire Pressure
+G = G-Force Meter
+R = Radar
+
+DRIVING MODES:
+S = Sport Mode
+C = Cruise Control (40+ km/h)
+D = Drift Mode (80+ km/h)
+B = Turbo Boost (60+ km/h)
+A = Autopilot
+
+EFFECTS:
+N = Night Vision
+M = Rain Mode
+? = Help
+                    `;
+                    alert(shortcuts);
+                }
+            });
+
+            // 23. REFUEL (Press 'F')
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'f' || e.key === 'F') {
+                    if(currentSpeed === 0) {
+                        playClick();
+                        currentFuel = 100;
+                        showNotification('⛽ Refueled to 100%', 'fa-gas-pump');
+                    }
+                }
+            });
+
+            // Console welcome message
+            console.log('%c🏁 MUSTANG DASHBOARD ULTRA 🏁', 'color: #ff3333; font-size: 20px; font-weight: bold;');
+            console.log('%cPress ? for keyboard shortcuts', 'color: #33ffaa; font-size: 14px;');
+
+        }); // END DOM CONTENT LOADED
+    </script>
+</body>
+</html>

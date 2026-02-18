@@ -1,0 +1,578 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mustang Dashboard Compact</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* --- VARIABLES --- */
+        :root {
+            --theme-color: #ffffff; 
+            --theme-shadow: rgba(255, 255, 255, 0.4);
+            --glass-bg: linear-gradient(180deg, rgba(10,10,10,0.95) 0%, rgba(0,0,0,0.98) 100%);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; transition: all 0.3s ease; }
+        
+        body {
+            background-color: #000;
+            color: white;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            position: relative;
+            font-family: 'Rajdhani', sans-serif;
+        }
+
+        /* --- LAYERS SYSTEM --- */
+        .layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.4s ease, visibility 0.4s;
+            display: flex; justify-content: center; align-items: center;
+            z-index: 5; 
+        }
+
+        .layer.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* 1. CAR LAYER */
+        .background-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: url("{% static 'car_dashboard/images/dashboard_car.png' %}") no-repeat;
+            background-size: 55% auto; 
+            background-position: center 60%; 
+            background-color: #000; 
+            z-index: 0; 
+            opacity: 1;
+            transition: opacity 0.5s ease;
+        }
+        
+        body.mode-overlay .background-layer { opacity: 0.2; filter: blur(8px); }
+
+        /* HIDE UI WHEN MENU IS OPEN */
+        body.mode-overlay .dashboard-panel,
+        body.mode-overlay .gear-selector {
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.95);
+        }
+
+        /* 2. MAP LAYER */
+        .map-layer { z-index: 5; }
+        .map-layer iframe {
+            width: 100%; height: 100%; border: none;
+            filter: invert(90%) hue-rotate(180deg) contrast(90%) grayscale(20%);
+        }
+
+        /* 3. CONTACTS POPUP */
+        .contacts-container {
+            width: 500px; height: 50vh;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 30px;
+            padding: 20px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            overflow-y: auto;
+        }
+        .contacts-container::-webkit-scrollbar { width: 0px; }
+
+        .contact-item {
+            display: flex; align-items: center; gap: 15px;
+            padding: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            cursor: pointer;
+            border-radius: 15px;
+        }
+        .contact-item:hover { background: rgba(255,255,255,0.1); }
+        .avatar {
+            width: 45px; height: 45px; border-radius: 50%;
+            background: #222; display: flex; justify-content: center; align-items: center;
+            font-size: 18px; color: #888; border: 1px solid #333;
+        }
+        .contact-info h3 { font-size: 16px; color: #fff; margin-bottom: 2px;}
+        .contact-info p { font-size: 12px; color: #666; }
+        .call-btn { margin-left: auto; color: #4caf50; font-size: 20px; padding: 10px; border-radius: 50%; background: rgba(76, 175, 80, 0.1); }
+
+        /* 4. PLAYLIST POPUP */
+        .playlist-container {
+            width: 500px; height: 50vh;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 30px;
+            padding: 20px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            overflow-y: auto;
+        }
+        .playlist-container::-webkit-scrollbar { width: 0px; }
+
+        .playlist-item {
+            display: flex; align-items: center; gap: 15px;
+            padding: 12px;
+            border-radius: 15px;
+            margin-bottom: 5px;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+        .playlist-item:hover { background: rgba(255,255,255,0.05); }
+        .playlist-item.active-song { 
+            background: rgba(255,255,255,0.1); 
+            border: 1px solid var(--theme-color);
+            box-shadow: 0 0 15px rgba(255,255,255,0.05);
+        }
+        .song-idx { font-size: 12px; color: #555; width: 20px; text-align: center;}
+        
+        .vignette {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0) 30%, rgba(0,0,0,1) 100%);
+            z-index: 1; pointer-events: none;
+        }
+
+        /* --- DASHBOARD UI --- */
+        .status-bar {
+            position: absolute; top: 30px; left: 40px;
+            display: flex; align-items: center; gap: 15px;
+            font-size: 18px; font-weight: 600; color: #ddd;
+            z-index: 20; text-shadow: 0 2px 5px rgba(0,0,0,1);
+        }
+
+        .gear-selector {
+            position: absolute; top: 25px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; gap: 20px; z-index: 20;
+            transition: opacity 0.4s ease; 
+        }
+        .gear-btn {
+            width: 45px; height: 45px; border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #444, #111);
+            border: 1px solid #555; display: flex; justify-content: center; align-items: center;
+            font-weight: 700; font-size: 16px; color: #999;
+            text-shadow: 0 0 5px rgba(255,255,255,0.2);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.9); cursor: pointer;
+        }
+        .gear-btn.active {
+            background: radial-gradient(circle at 30% 30%, #fff, #ddd); color: #000; border: none;
+            box-shadow: 0 0 15px var(--theme-color), 0 0 40px var(--theme-shadow); transform: scale(1.1);
+        }
+
+        /* --- UPDATED: COMPACT & GLOSSY PANELS --- */
+        .dashboard-panel {
+            position: absolute; 
+            /* Shorter Height (22% from top/bottom) */
+            top: 22%; 
+            bottom: 22%; 
+            /* Narrower Width */
+            width: 220px; 
+            
+            /* Glossy Style */
+            background: linear-gradient(180deg, rgba(30,30,30,0.4) 0%, rgba(0,0,0,0.7) 100%);
+            backdrop-filter: blur(20px); 
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 35px; 
+            border: 1px solid rgba(255,255,255,0.15);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.05);
+            
+            display: flex; flex-direction: column; justify-content: space-evenly; align-items: center;
+            z-index: 10; 
+            transition: opacity 0.4s ease;
+        }
+        .panel-left { left: 20px; } .panel-right { right: 20px; }
+
+        /* Gauges (Scaled Down) */
+        .gauge-container { 
+            position: relative; 
+            width: 75px; height: 75px; /* Smaller */
+            display: flex; justify-content: center; align-items: center; 
+        }
+        .gauge-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: rotate(135deg); filter: drop-shadow(0 0 6px var(--theme-shadow)); }
+        .gauge-svg circle { fill: none; stroke-width: 4; stroke-linecap: round; }
+        .panel-right .gauge-svg { transform: scaleX(-1) rotate(135deg); }
+        .circle-bg { stroke: rgba(255,255,255,0.05); }
+        .circle-val { stroke: var(--theme-color); transition: stroke-dashoffset 0.1s linear, stroke 0.5s ease; }
+        .gauge-info { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 100%; }
+        
+        .val-text { 
+            display: block; 
+            font-size: 20px; /* Smaller Text */
+            font-weight: 700; color: #fff; line-height: 0.9; text-shadow: 0 0 10px var(--theme-shadow); 
+        }
+        .unit-text { font-size: 10px; color: #ccc; margin-top: 4px; font-weight: 500; text-transform: lowercase; }
+
+        /* Bottom Dock */
+        .bottom-area { position: absolute; bottom: 25px; left: 0; width: 100%; display: flex; justify-content: space-between; padding: 0 50px; z-index: 20; }
+        .glass-dock { height: 55px; background: linear-gradient(180deg, rgba(20,20,20,0.95) 0%, rgba(0,0,0,1) 100%); border: 1px solid rgba(255,255,255,0.15); border-radius: 28px; display: flex; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.95); }
+        .dock-left { width: 40%; justify-content: space-evenly; }
+        .app-icon { width: 18px; opacity: 0.6; cursor: pointer; transition: 0.3s; }
+        .app-icon img { width: 100%; filter: brightness(0) invert(1); }
+        .app-icon:hover, .app-icon.active { opacity: 1; transform: scale(1.15); filter: drop-shadow(0 0 6px var(--theme-color)); }
+        .dock-right { width: 40%; padding: 0 20px; gap: 12px; }
+        .album-art { width: 32px; height: 32px; border-radius: 50%; background-color: #333; background-size: cover; background-position: center; border: 1px solid rgba(255,255,255,0.3); transition: box-shadow 0.3s ease; }
+        .album-art.playing { box-shadow: 0 0 15px var(--theme-color); animation: pulse-glow 2s infinite; }
+        @keyframes pulse-glow { 0% { box-shadow: 0 0 5px var(--theme-color); } 50% { box-shadow: 0 0 20px var(--theme-color); } 100% { box-shadow: 0 0 5px var(--theme-color); } }
+        .track-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        .song-title { font-size: 12px; font-weight: 700; color: #fff; }
+        .song-meta { font-size: 9px; color: #aaa; margin-top: 1px; }
+        .controls { display: flex; gap: 12px; font-size: 14px; color: #fff; }
+        .controls i { cursor: pointer; transition: 0.2s; }
+        .controls i:hover { text-shadow: 0 0 8px var(--theme-color); color: var(--theme-color); }
+    /* --- CAR IGNITION ANIMATION --- */
+        @keyframes car-ignition {
+            0% {
+                filter: brightness(0) blur(10px); /* Pitch black & blurry */
+                background-size: 60% auto;       /* Zoomed out slightly */
+            }
+            15% {
+                filter: brightness(0.2) blur(5px); /* Dim light */
+            }
+            30% {
+                filter: brightness(1.8) blur(0px); /* FLASH! (Headlights on) */
+                background-size: 64% auto;        /* Zooming in fast */
+            }
+            100% {
+                filter: brightness(1) blur(0px);   /* Settle to normal */
+                background-size: 65% auto;        /* Final zoom position */
+            }
+        }
+
+        /* Class to trigger the animation */
+        .car-animating .background-layer {
+            animation: car-ignition 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="background-layer"></div>
+    <div class="vignette"></div>
+
+    <div class="layer" id="layer-map">
+        <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d243647.31604070624!2d78.40804555!3d17.41262745!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bcb99daeaebd2c7%3A0xae93b78392bafbc2!2sHyderabad%2C%20Telangana!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin" style="width:100%; height:100%;" allowfullscreen="" loading="lazy"></iframe>
+    </div>
+
+    <div class="layer" id="layer-contacts">
+        <div class="contacts-container">
+            <h2 style="margin-bottom: 20px; font-weight: 700;">Contacts</h2>
+            <div class="contact-item">
+                <div class="avatar"><i class="fas fa-user"></i></div>
+                <div class="contact-info"><h3>Mom</h3><p>+1 234 567 890</p></div>
+                <div class="call-btn"><i class="fas fa-phone"></i></div>
+            </div>
+            <div class="contact-item">
+                <div class="avatar"><i class="fas fa-building"></i></div>
+                <div class="contact-info"><h3>Work</h3><p>+1 987 654 321</p></div>
+                <div class="call-btn"><i class="fas fa-phone"></i></div>
+            </div>
+            <div class="contact-item">
+                <div class="avatar"><i class="fas fa-user-circle"></i></div>
+                <div class="contact-info"><h3>John Doe</h3><p>+1 555 019 283</p></div>
+                <div class="call-btn"><i class="fas fa-phone"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="layer" id="layer-playlist">
+        <div class="playlist-container">
+            <h2 style="margin-bottom: 20px; font-weight: 700;">Now Playing</h2>
+            <div id="playlist-items-container"></div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <i class="fas fa-wifi"></i>
+        <span id="live-clock">--:--</span>
+        <span id="live-date" style="opacity: 0.6; font-weight: 400; margin-left: 10px;">--- --- --</span>
+    </div>
+
+    <div class="gear-selector">
+        <div class="gear-btn">P</div>
+        <div class="gear-btn active">R</div>
+        <div class="gear-btn">N</div>
+        <div class="gear-btn">D</div>
+    </div>
+
+    <div class="dashboard-panel panel-left">
+        <div class="gauge-container"><svg class="gauge-svg" viewBox="0 0 100 100"><circle class="circle-bg" cx="50" cy="50" r="45"></circle><circle class="circle-val" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="120"></circle></svg><div class="gauge-info"><span class="val-text" id="gauge-clock">12:33</span><span class="unit-text" id="gauge-ampm">pm</span></div></div>
+        <div class="gauge-container"><svg class="gauge-svg" viewBox="0 0 100 100"><circle class="circle-bg" cx="50" cy="50" r="45"></circle><circle class="circle-val" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="150"></circle></svg><div class="gauge-info"><span class="val-text">20°C</span><span class="unit-text">temperature</span></div></div>
+        <div class="gauge-container"><svg class="gauge-svg" viewBox="0 0 100 100"><circle class="circle-bg" cx="50" cy="50" r="45"></circle><circle class="circle-val" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="90"></circle></svg><div class="gauge-info"><span class="val-text">75 %</span><span class="unit-text">volume</span></div></div>
+    </div>
+
+    <div class="dashboard-panel panel-right">
+        <div class="gauge-container"><svg class="gauge-svg" viewBox="0 0 100 100"><circle class="circle-bg" cx="50" cy="50" r="45"></circle><circle id="speed-ring" class="circle-val" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="283"></circle></svg><div class="gauge-info"><span id="speed-val" class="val-text" style="font-size: 28px;">0</span><span class="unit-text">km/h<br>speed</span></div></div>
+        <div class="gauge-container"><svg class="gauge-svg" viewBox="0 0 100 100"><circle class="circle-bg" cx="50" cy="50" r="45"></circle><circle class="circle-val" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="130"></circle></svg><div class="gauge-info"><span class="val-text">60%</span><span class="unit-text">fuel</span></div></div>
+        <div class="gauge-container"><svg class="gauge-svg" viewBox="0 0 100 100"><circle class="circle-bg" cx="50" cy="50" r="45"></circle><circle class="circle-val" cx="50" cy="50" r="45" stroke-dasharray="283" stroke-dashoffset="190"></circle></svg><div class="gauge-info"><span class="val-text">32 km</span><span class="unit-text">range</span></div></div>
+    </div>
+
+    <div class="bottom-area">
+        <div class="glass-dock dock-left">
+            <div class="app-icon active" id="btn-home" data-target="home"><img src="{% static 'car_dashboard/images/car.png' %}"></div>
+            <div class="app-icon" id="btn-map" data-target="layer-map"><img src="{% static 'car_dashboard/images/map.png' %}"></div>
+            <div class="app-icon" id="btn-phone" data-target="layer-contacts"><img src="{% static 'car_dashboard/images/call.log.png' %}"></div>
+            <div class="app-icon" id="btn-music" data-target="layer-playlist"><img src="{% static 'car_dashboard/images/vaadin_music.png' %}"></div>
+            <div class="app-icon" id="settings-btn"><img src="{% static 'car_dashboard/images/settings.png' %}"></div>
+            <div class="app-icon"><img src="{% static 'car_dashboard/images/person.png' %}"></div>
+        </div>
+
+        <div class="glass-dock dock-right">
+            <div class="album-art"></div>
+            <div class="track-info">
+                <div class="song-title">Mockingbird</div>
+                <div class="song-meta">Eminem - Mockingbird - Single</div>
+            </div>
+            <div class="controls">
+                <i class="fas fa-backward" id="prev-btn"></i>
+                <i class="fas fa-play" id="play-btn"></i>
+                <i class="fas fa-forward" id="next-btn"></i>
+            </div>
+        </div>
+    </div>
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            /* --- 1. AUDIO SYSTEM --- */
+            const soundPath = "{% static 'car_dashboard/audio/speed_sound.mp3' %}";
+            console.log("Attempting to load sound from:", soundPath);
+
+            const clickSfx = new Audio(soundPath);
+            clickSfx.volume = 1.0; 
+
+            // Audio Debugging
+            clickSfx.addEventListener('canplaythrough', () => console.log("✅ Audio loaded!"));
+            clickSfx.addEventListener('error', (e) => console.error("❌ Audio failed:", e));
+
+            /* --- 2. ANIMATION: CAR IGNITION SEQUENCE --- */
+            // Add class immediately to start dark & flash lights
+            document.body.classList.add('car-animating');
+
+            // Remove class after 2 seconds to finish the zoom
+            setTimeout(() => {
+                document.body.classList.remove('car-animating');
+            }, 2000);
+
+            /* --- 3. ANIMATION: GAUGE SWEEP (Startup) --- */
+            setTimeout(() => {
+                const speedRing = document.getElementById('speed-ring');
+                if(speedRing) {
+                    speedRing.style.transition = "stroke-dashoffset 0.8s ease-in-out";
+                    speedRing.style.strokeDashoffset = "80"; // Go to Max
+                    
+                    setTimeout(() => {
+                        speedRing.style.strokeDashoffset = "283"; // Go back to Zero
+                        setTimeout(() => { 
+                            speedRing.style.transition = "stroke-dashoffset 0.1s linear"; 
+                        }, 800);
+                    }, 1000);
+                }
+            }, 500);
+
+            /* --- 4. SONGS DATA --- */
+            const audioPlayer = new Audio();
+            const songs = [
+                { title: "Mockingbird", artist: "Eminem", cover: "https://upload.wikimedia.org/wikipedia/en/6/60/Eminem_-_Mockingbird.jpg", src: "{% static 'car_dashboard/audio/mockingbird.mp3' %}" },
+                { title: "Starboy", artist: "The Weeknd", cover: "https://upload.wikimedia.org/wikipedia/en/3/39/The_Weeknd_-_Starboy.png", src: "{% static 'car_dashboard/audio/starboy.mp3' %}" },
+                { title: "Metamorphosis", artist: "Interworld", cover: "https://i1.sndcdn.com/artworks-5058e578-8314-43cb-b003-81b4380f5556-0-t500x500.jpg", src: "{% static 'car_dashboard/audio/metamorphosis.mp3' %}" }
+            ];
+            let songIndex = 0;
+            let isPlaying = false;
+
+            /* --- 5. VIEW SWITCHER --- */
+            const navButtons = document.querySelectorAll('.dock-left .app-icon[data-target]');
+            const layers = document.querySelectorAll('.layer:not(.background-layer)');
+            const body = document.body;
+
+            navButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    playClick(); // Sound on dock click
+                    document.querySelectorAll('.app-icon').forEach(icon => icon.classList.remove('active'));
+                    btn.classList.add('active');
+                    layers.forEach(layer => layer.classList.remove('active'));
+                    
+                    const targetId = btn.getAttribute('data-target');
+                    if (targetId === 'home') {
+                        body.classList.remove('mode-overlay');
+                    } else {
+                        body.classList.add('mode-overlay');
+                        const targetLayer = document.getElementById(targetId);
+                        if(targetLayer) targetLayer.classList.add('active');
+                    }
+                });
+            });
+
+            /* --- 6. PLAYLIST UI --- */
+            const playlistContainer = document.getElementById('playlist-items-container');
+            if (playlistContainer) {
+                songs.forEach((song, index) => {
+                    const item = document.createElement('div');
+                    item.classList.add('playlist-item');
+                    item.innerHTML = `
+                        <div class="song-idx">${index + 1}</div>
+                        <div class="avatar" style="background-image: url('${song.cover}'); background-size:cover; width:35px; height:35px; border-radius:8px;"></div>
+                        <div class="contact-info" style="margin-left:10px;">
+                            <h3 style="font-size:14px; margin:0;">${song.title}</h3>
+                            <p style="font-size:11px; margin:0; color:#888;">${song.artist}</p>
+                        </div>
+                    `;
+                    item.addEventListener('click', () => {
+                        playClick();
+                        songIndex = index;
+                        loadSong(songIndex);
+                    });
+                    playlistContainer.appendChild(item);
+                });
+            }
+
+            function updatePlaylistHighlight() {
+                const items = document.querySelectorAll('.playlist-item');
+                items.forEach((item, idx) => {
+                    if(idx === songIndex) item.classList.add('active-song');
+                    else item.classList.remove('active-song');
+                });
+            }
+
+            /* --- 7. AUDIO PLAYER --- */
+            const titleEl = document.querySelector('.song-title');
+            const metaEl = document.querySelector('.song-meta');
+            const artEl = document.querySelector('.album-art');
+            const playBtn = document.getElementById('play-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const prevBtn = document.getElementById('prev-btn');
+
+            loadSong(0);
+
+            function loadSong(index) {
+                const song = songs[index];
+                if(titleEl) titleEl.innerText = song.title;
+                if(metaEl) metaEl.innerText = song.artist;
+                if(artEl) artEl.style.backgroundImage = `url('${song.cover}')`;
+                audioPlayer.src = song.src;
+                if(isPlaying) audioPlayer.play();
+                updatePlaylistHighlight();
+            }
+
+            if(playBtn) {
+                playBtn.addEventListener('click', () => {
+                    if (isPlaying) {
+                        audioPlayer.pause();
+                        playBtn.classList.remove('fa-pause');
+                        playBtn.classList.add('fa-play');
+                        if(artEl) artEl.classList.remove('playing');
+                    } else {
+                        audioPlayer.play();
+                        playBtn.classList.remove('fa-play');
+                        playBtn.classList.add('fa-pause');
+                        if(artEl) artEl.classList.add('playing');
+                    }
+                    isPlaying = !isPlaying;
+                });
+            }
+
+            function playClick() {
+                clickSfx.currentTime = 0;
+                clickSfx.play().catch(e => console.log("Audio play error:", e));
+            }
+
+            if(nextBtn) nextBtn.addEventListener('click', () => { 
+                playClick();
+                songIndex = (songIndex + 1) % songs.length; 
+                loadSong(songIndex); 
+            });
+
+            if(prevBtn) prevBtn.addEventListener('click', () => { 
+                playClick();
+                songIndex = (songIndex - 1 + songs.length) % songs.length; 
+                loadSong(songIndex); 
+            });
+
+            audioPlayer.addEventListener('ended', () => { 
+                songIndex = (songIndex + 1) % songs.length; 
+                loadSong(songIndex); 
+            });
+
+            /* --- 8. DRIVING PHYSICS & DYNAMIC GLOW --- */
+            let currentSpeed = 0, targetSpeed = 0, isAccelerating = false;
+            document.addEventListener('keydown', (e) => { if (e.key === 'ArrowUp' || e.key === 'w') { isAccelerating = true; targetSpeed = 220; } });
+            document.addEventListener('keyup', (e) => { if (e.key === 'ArrowUp' || e.key === 'w') { isAccelerating = false; targetSpeed = 0; } });
+            
+            setInterval(() => {
+                if (isAccelerating) { if (currentSpeed < targetSpeed) currentSpeed += 2; } else { if (currentSpeed > 0) currentSpeed -= 1; }
+                
+                const speedValEl = document.getElementById('speed-val');
+                const speedRingEl = document.getElementById('speed-ring');
+
+                if(speedValEl) {
+                    speedValEl.innerText = Math.floor(currentSpeed);
+                    
+                    // Dynamic Glow Effect
+                    let intensity = currentSpeed / 220;
+                    let blurRadius = 10 + (intensity * 20);
+                    speedValEl.style.textShadow = `0 0 ${blurRadius}px var(--theme-color)`;
+                    
+                    // Jitter Effect at high speed
+                    if (currentSpeed > 150) {
+                        let jX = (Math.random() - 0.5) * 2; 
+                        let jY = (Math.random() - 0.5) * 2;
+                        speedValEl.style.transform = `translate(${jX}px, ${jY}px)`;
+                    } else {
+                        speedValEl.style.transform = `translate(0px, 0px)`;
+                    }
+                }
+
+                if(speedRingEl) {
+                    const maxOffset = 283; const minOffset = 80;
+                    const percentage = currentSpeed / 220;
+                    speedRingEl.style.strokeDashoffset = maxOffset - (percentage * (maxOffset - minOffset));
+                }
+            }, 20);
+
+            /* --- 9. CLOCK & THEME --- */
+            function updateDashboard() {
+                const now = new Date();
+                let hours = now.getHours(); const minutes = String(now.getMinutes()).padStart(2, '0'); const ampm = hours >= 12 ? 'pm' : 'am';
+                hours = hours % 12; hours = hours ? hours : 12; 
+                const timeStr = `${hours}:${minutes}`;
+                
+                const liveClock = document.getElementById('live-clock');
+                const gaugeClock = document.getElementById('gauge-clock');
+                const gaugeAmpm = document.getElementById('gauge-ampm');
+                const liveDate = document.getElementById('live-date');
+
+                if(liveClock) liveClock.innerText = timeStr;
+                if(gaugeClock) gaugeClock.innerText = timeStr;
+                if(gaugeAmpm) gaugeAmpm.innerText = ampm;
+                
+                const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; 
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                if(liveDate) liveDate.innerText = `${days[now.getDay()]} ${months[now.getMonth()]} ${now.getDate()}`;
+            }
+            setInterval(updateDashboard, 1000); updateDashboard();
+
+            const settingsBtn = document.getElementById('settings-btn');
+            const root = document.documentElement;
+            let themeState = 0; 
+            if(settingsBtn) {
+                settingsBtn.addEventListener('click', () => {
+                    playClick();
+                    themeState = (themeState + 1) % 3;
+                    if(themeState === 0) { root.style.setProperty('--theme-color', '#ffffff'); root.style.setProperty('--theme-shadow', 'rgba(255, 255, 255, 0.4)'); } 
+                    else if (themeState === 1) { root.style.setProperty('--theme-color', '#ff3333'); root.style.setProperty('--theme-shadow', 'rgba(255, 50, 50, 0.6)'); } 
+                    else { root.style.setProperty('--theme-color', '#33ffaa'); root.style.setProperty('--theme-shadow', 'rgba(50, 255, 170, 0.5)'); }
+                });
+            }
+            
+            const gears = document.querySelectorAll('.gear-btn');
+            gears.forEach(gear => gear.addEventListener('click', function() { 
+                playClick();
+                gears.forEach(g => g.classList.remove('active')); this.classList.add('active'); 
+            }));
+
+        }); // END OF DOM CONTENT LOADED
+    </script>
+</body>
+</html>         
